@@ -4,6 +4,7 @@ from models.research_project import ResearchProjectModel,ResearchMemberModel
 from schemas.schema import ResearchProjectCreate,ResearchProjectUpdate
 
 from models.user import UserModel
+from utils.exceptions import *
 # Tạo dự án
 def create_project(data: ResearchProjectCreate,current_user: UserModel,db: Session):
     project = ResearchProjectModel(
@@ -27,10 +28,13 @@ def create_project(data: ResearchProjectCreate,current_user: UserModel,db: Sessi
 
     return project
 # Lấy danh sách dự án
-def get_projects(current_user: UserModel,db: Session):
+def get_projects(
+    current_user: UserModel,
+    db: Session,
+    search: str = None
+):
     query = (
         db.query(ResearchProjectModel)
-        # ghép dữ liệu từ 2 bảng 
         .join(
             ResearchMemberModel,
             ResearchProjectModel.id == ResearchMemberModel.project_id
@@ -40,16 +44,18 @@ def get_projects(current_user: UserModel,db: Session):
         )
     )
 
+    if search:
+        query = query.filter(
+            ResearchProjectModel.name.contains(search)
+        )
+
     return query.all()
 # Lấy chi tiết dự án
 def get_project_detail(project_id: int,current_user: UserModel,db: Session):
     project = (db.query(ResearchProjectModel).filter(ResearchProjectModel.id == project_id).first())
 
     if not project:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Không tìm thấy dự án"
-        )
+        not_found("Không tìm thấy dự án")
     member = (
         db.query(ResearchMemberModel)
         .filter(
@@ -60,10 +66,7 @@ def get_project_detail(project_id: int,current_user: UserModel,db: Session):
     )
 
     if not member:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Không có quyền xem"
-        )
+        forbidden("Không có quyền xem")
 
     return project
 # kiểm tra xem người dùng hiện tại có phải OWNER của đề tài nghiên cứu hay không
@@ -80,10 +83,7 @@ def check_owner(project_id: int,user_id: int,db: Session):
     )
 
     if not member:
-        raise HTTPException(
-            status_code= status.HTTP_403_FORBIDDEN,
-            detail="Chỉ OWNER được thực hiện"
-        )
+        forbidden("Chỉ OWNER được thực hiện")
 
     return member
 # Cập nhật dự án
@@ -93,10 +93,7 @@ def update_project(project_id: int,data: ResearchProjectUpdate,current_user: Use
     project = (db.query(ResearchProjectModel).filter(ResearchProjectModel.id == project_id).first())
 
     if not project:
-        raise HTTPException(
-            status_code= status.HTTP_404_NOT_FOUND,
-            detail="Không tìm thấy dự án"
-        )
+        not_found("Không tìm thấy dự án")
 
     project.name = data.name
     project.description = data.description
@@ -112,10 +109,7 @@ def delete_project(project_id: int,current_user: UserModel,db: Session):
     project = (db.query(ResearchProjectModel).filter(ResearchProjectModel.id == project_id).first())
 
     if not project:
-        raise HTTPException(
-            status_code= status.HTTP_404_NOT_FOUND,
-            detail="Không tìm thấy dự án"
-        )
+        not_found("Không tìm thấy dự án")
 
     db.delete(project)
     db.commit()
@@ -131,10 +125,7 @@ def add_member(
     user = (db.query(UserModel).filter(UserModel.id == user_id).first())
 
     if not user:
-        raise HTTPException(
-            status_code= status.HTTP_404_NOT_FOUND,
-            detail="Người dùng không tồn tại"
-        )
+        not_found("Người dùng không tồn tại")
 
     existing = (
         db.query(ResearchMemberModel)
@@ -146,10 +137,7 @@ def add_member(
     )
 
     if existing:
-        raise HTTPException(
-            status_code= status.HTTP_400_BAD_REQUEST,
-            detail="Người dùng đã là thành viên project"
-        )
+        bad_request("Người dùng đã là thành viên project")
 
     member = ResearchMemberModel(
         project_id=project_id,
@@ -182,16 +170,10 @@ def remove_member(project_id: int,user_id: int,current_user: UserModel,db: Sessi
     )
 
     if not member:
-        raise HTTPException(
-            status_code= status.HTTP_404_NOT_FOUND,
-            detail="Member không tồn tại"
-        )
+        not_found("Member không tồn tại")
 
     if member.role == "OWNER":
-        raise HTTPException(
-            status_code= status.HTTP_400_BAD_REQUEST,
-            detail="Không được xóa OWNER"
-        )
+        bad_request("Không được xóa OWNER")
 
     db.delete(member)
     db.commit()
@@ -212,10 +194,7 @@ def get_members(project_id: int,current_user: UserModel,db: Session):
     )
 
     if not member:
-        raise HTTPException(
-            status_code= status.HTTP_403_FORBIDDEN,
-            detail="Không có quyền xem"
-        )
+        forbidden("Không có quyền xem")
 
     return (
         db.query(ResearchMemberModel).filter(ResearchMemberModel.project_id == project_id).all()
