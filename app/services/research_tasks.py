@@ -1,9 +1,11 @@
 from fastapi import HTTPException,status
 from sqlalchemy.orm import Session
+from sqlalchemy import desc
 from models.user import UserModel
 from models.research_task import ResearchTaskModel
 from models.research_project import ResearchMemberModel
 from schemas.schema import ResearchTaskCreate,ResearchTaskUpdate
+from utils.exceptions import *
 
 def check_member(project_id: int,user_id: int,db: Session):
     member = (
@@ -16,10 +18,7 @@ def check_member(project_id: int,user_id: int,db: Session):
     )
 
     if not member:
-        raise HTTPException(
-            status_code=403,
-            detail="Không có quyền hạn"
-        )
+        forbidden("Không có quyền hạn")
     return member
 # Tạo nhiệm vụ nghiên cứu
 def create_task(project_id: int,data: ResearchTaskCreate,current_user: UserModel,db: Session):
@@ -38,16 +37,51 @@ def create_task(project_id: int,data: ResearchTaskCreate,current_user: UserModel
     db.refresh(task)
 
     return task
+def get_tasks(
+    project_id: int,
+    current_user: UserModel,
+    db: Session,
+    search=None,
+    status_filter=None,
+    priority=None,
+    assignee_id=None,
+    limit=10,
+    offset=0,
+    sort_by="created_at",
+    order="desc"
+):
+    check_member(project_id,current_user.id,db)
+
+    query = (
+        db.query(ResearchTaskModel).filter(ResearchTaskModel.project_id == project_id))
+    if search:
+        query = query.filter(ResearchTaskModel.title.contains(search))
+    if status_filter:
+        query = query.filter(ResearchTaskModel.status == status_filter)
+    if priority:
+        query = query.filter(ResearchTaskModel.priority == priority)
+    if assignee_id:
+        query = query.filter(ResearchTaskModel.assignee_id == assignee_id)
+    # sắp xếp
+    if sort_by == "due_date":
+        if order == "asc":
+            query = query.order_by(ResearchTaskModel.due_date.asc())
+        else:
+            query = query.order_by(ResearchTaskModel.due_date.desc())
+    else:
+
+        if order == "asc":
+            query = query.order_by(ResearchTaskModel.created_at.asc())
+        else:
+            query = query.order_by( ResearchTaskModel.created_at.desc())
+    return (query.offset(offset).limit(limit).all())
 
 # Lấy danh sách nhiệm vụ chi tiết
 def get_task(task_id: int,current_user: UserModel,db: Session):
     task = (db.query(ResearchTaskModel).filter(ResearchTaskModel.id == task_id).first())
 
     if not task:
-        raise HTTPException(
-            status_code=404,
-            detail="Task không tồn tại"
-        )
+        not_found("Task không tồn tại")
 
     check_member(
         task.project_id,
@@ -69,10 +103,7 @@ def assign_task(task_id: int,assignee_id: int,current_user: UserModel,db: Sessio
         .first()
     )
     if not owner:
-        raise HTTPException(
-            status_code=403,
-            detail="Chỉ OWNER được giao việc"
-        )
+        forbidden("Chỉ OWNER được giao việc này")
     member = (
         db.query(ResearchMemberModel)
         .filter(
@@ -93,31 +124,40 @@ def assign_task(task_id: int,assignee_id: int,current_user: UserModel,db: Sessio
 
     return task
 
-def update_task(task_id: int,data: ResearchTaskUpdate,current_user: UserModel,db: Session):
-    task = get_task(task_id,current_user,db)
-
+def update_task(
+    task_id: int,
+    data: ResearchTaskUpdate,
+    current_user: UserModel,
+    db: Session
+):
+    task = get_task(
+        task_id,
+        current_user,
+        db
+    )
     member = (
         db.query(ResearchMemberModel)
         .filter(
             ResearchMemberModel.project_id == task.project_id,
             ResearchMemberModel.user_id == current_user.id
-        ).first())
-# chủ đc sửa tất cả field
-    if member.role == "OWNER":
+        )
+        .first()
+    )
 
-        data_dict = data.model_dump()
+    data_dict = data.model_dump(exclude_unset=True)
+    # OWNER sửa tất cả
+    if member.role == "OWNER":
         for key, value in data_dict.items():
             setattr(task, key, value)
-# assignee chỉ đc sửa mỗi field trạng thái
+    # ASSIGNEE chỉ sửa status
     elif task.assignee_id == current_user.id:
-        if data.status:
-            task.status = data.status
-
+        allowed_field = ["status"]
+        for key, value in data_dict.items():
+            if key not in allowed_field:
+                forbidden("Assignee chỉ được cập nhật status")
+            setattr(task, key, value)
     else:
-        raise HTTPException(
-            status_code=403,
-            detail="Không có quyền"
-        )
+        forbidden("Không có quyền")
 
     db.commit()
     db.refresh(task)
@@ -138,10 +178,7 @@ def delete_task(task_id: int,current_user: UserModel,db: Session):
     )
 
     if not owner:
-        raise HTTPException(
-            status_code=403,
-            detail="Chỉ OWNER được xóa"
-        )
+        forbidden("Chỉ OWNER được xóa")
 
     db.delete(task)
     db.commit()
