@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from db.database import get_db
 from dependencies.dependencies import get_current_user
 from models.user import UserModel
-from schemas.schema import (ResearchProjectCreate,ResearchProjectUpdate,ResearchProjectResponse,MemberCreate)
+from schemas.schema import (ResearchProjectCreate,ResearchProjectUpdate,ResearchProjectResponse,MemberCreate,MemberResponse)
 
 from services.research_projects import *
 
@@ -15,12 +15,12 @@ def create_pj(
     return create_project(data,current_user,db)
 
 @router.get("")
-def get_all_pj(search: str = Query(None),db: Session = Depends(get_db),current_user: UserModel = Depends(get_current_user)):
-    return get_projects(current_user,db,search)
+def get_all_pj(db: Session = Depends(get_db),current_user: UserModel = Depends(get_current_user)):
+    return get_projects(current_user,db)
 
-@router.get_detali_pj("/{project_id}")
-def get_detali(project_id: int,db: Session = Depends(get_db),current_user: UserModel = Depends(get_current_user)):
-    return get_project(project_id,current_user,db)
+@router.get("/{project_id}")
+def get_detali_pj(project_id: int,db: Session = Depends(get_db),current_user: UserModel = Depends(get_current_user)):
+    return get_project_detail(project_id,current_user,db)
 
 @router.put("/{project_id}")
 def update_pj(
@@ -57,8 +57,8 @@ def remove_members(
 ):
     return remove_member(project_id,user_id,current_user,db)
 
-@router.get("/{project_id}/members")
-def get_members(
+@router.get("/{project_id}/members",response_model=list[MemberResponse])
+def get_members_api(
     project_id: int,
     db: Session = Depends(get_db),
     current_user: UserModel = Depends(get_current_user)
