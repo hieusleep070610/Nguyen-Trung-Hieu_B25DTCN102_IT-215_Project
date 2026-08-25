@@ -15,8 +15,12 @@ def create_pj(
     return create_project(data,current_user,db)
 
 @router.get("")
-def get_all_pj(db: Session = Depends(get_db),current_user: UserModel = Depends(get_current_user)):
-    return get_projects(current_user,db)
+def get_all_pj(
+    search: str = Query(None),
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(get_current_user)
+):
+    return get_projects(current_user,db,search)
 
 @router.get("/{project_id}",response_model=ResearchProjectResponse)
 def get_detail_pj(project_id: int,db: Session = Depends(get_db),current_user: UserModel = Depends(get_current_user)):
