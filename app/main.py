@@ -1,6 +1,10 @@
 from fastapi import FastAPI,HTTPException, Depends, status
+
 from sqlalchemy import text
 from sqlalchemy.orm import Session
+
+from core.exception_handler import register_exception_handlers 
+
 from models.user import UserModel
 from models.research_project import ResearchProjectModel,ResearchMemberModel
 from models.research_task import ResearchTaskModel
@@ -14,6 +18,8 @@ from routers.research_task import router as task_router
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
+register_exception_handlers(app)
+
 app.include_router(auth_router)
 app.include_router(user_router)
 app.include_router(project_router)
