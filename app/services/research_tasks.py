@@ -114,10 +114,7 @@ def assign_task(task_id: int,assignee_id: int,current_user: UserModel,db: Sessio
     )
 
     if not member:
-        raise HTTPException(
-            status_code=400,
-            detail="User không thuộc project"
-        )
+        bad_request("User không thuộc project")
     task.assignee_id = assignee_id
     db.commit()
     db.refresh(task)
